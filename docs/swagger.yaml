@@ -1,0 +1,219 @@
+definitions:
+  dto.CreateTranslationRequestRequest:
+    properties:
+      languages:
+        example:
+        - es
+        - fr
+        - de
+        items:
+          type: string
+        minItems: 1
+        type: array
+      source_data:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - languages
+    - source_data
+    type: object
+  dto.CreateTranslationRequestResponse:
+    properties:
+      message:
+        example: Translation request created successfully and queued for processing
+        type: string
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: pending
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      error:
+        example: Invalid request body
+        type: string
+    type: object
+  dto.GetTranslationRequestResponse:
+    properties:
+      completed_at:
+        example: "2024-01-01T12:05:00Z"
+        type: string
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      languages:
+        example:
+        - es
+        - fr
+        - de
+        items:
+          type: string
+        type: array
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      source_data:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        example: completed
+        type: string
+      translated_data:
+        additionalProperties:
+          additionalProperties:
+            type: string
+          type: object
+        type: object
+      updated_at:
+        example: "2024-01-01T12:05:00Z"
+        type: string
+    type: object
+  dto.HealthResponse:
+    properties:
+      message:
+        example: Translation service is running
+        type: string
+      status:
+        example: ok
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: git@kovalenko.tech
+    name: Kyrylo Kovalenko
+    url: https://kovalenko.tech
+  description: A service for generating translations based on ARB files from Flutter
+    applications using OpenAI API
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Translation Service API
+  version: "1.0"
+paths:
+  /api/v1/health:
+    get:
+      description: Check if the service is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /api/v1/translations:
+    post:
+      consumes:
+      - application/json
+      description: Create a new translation request and queue it for processing
+      parameters:
+      - description: Translation request data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTranslationRequestRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateTranslationRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create translation request
+      tags:
+      - translations
+  /api/v1/translations/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get translation request status and details by ID
+      parameters:
+      - description: Request ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetTranslationRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get translation request
+      tags:
+      - translations
+  /api/v1/translations/{key}:
+    delete:
+      description: Delete translation key and all its translations by key
+      parameters:
+      - description: Translation key
+        in: path
+        name: key
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete translation key
+      tags:
+      - translations
+securityDefinitions:
+  ApiKeyAuth:
+    description: 'API Key for authentication. Use format: Bearer YOUR_API_KEY'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

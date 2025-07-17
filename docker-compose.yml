@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # Main application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: translation-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_QUEUE=translation_tasks
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - translation-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  # Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: translation-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - translation-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: translation-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - translation-network
+    restart: unless-stopped
+
+  # Redis Commander (optional, for viewing Redis data)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: translation-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - translation-network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  translation-network:
+    driver: bridge 
