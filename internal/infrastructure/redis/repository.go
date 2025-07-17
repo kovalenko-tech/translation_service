@@ -167,3 +167,34 @@ func (r *Repository) DeleteTranslationKey(ctx context.Context, key string) error
 	// Delete the key
 	return r.client.Del(ctx, redisKey).Err()
 }
+
+// GetIncompleteRequests gets all requests that are not completed, failed, or cancelled
+func (r *Repository) GetIncompleteRequests(ctx context.Context) ([]*translation.TranslationRequest, error) {
+	pattern := "translation_request:*"
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get translation request keys: %w", err)
+	}
+
+	var incompleteRequests []*translation.TranslationRequest
+	for _, key := range keys {
+		data, err := r.client.Get(ctx, key).Bytes()
+		if err != nil {
+			continue // Skip problematic keys
+		}
+
+		var request translation.TranslationRequest
+		if err := json.Unmarshal(data, &request); err != nil {
+			continue // Skip problematic keys
+		}
+
+		// Only include requests that are not completed, failed, or cancelled
+		if request.Status != translation.StatusCompleted &&
+			request.Status != translation.StatusFailed &&
+			request.Status != translation.StatusCancelled {
+			incompleteRequests = append(incompleteRequests, &request)
+		}
+	}
+
+	return incompleteRequests, nil
+}

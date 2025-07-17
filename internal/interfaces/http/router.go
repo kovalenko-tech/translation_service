@@ -15,7 +15,9 @@ func SetupRoutes(app *fiber.App, handler *Handler, apiKey string) {
 	// Translation endpoints (protected with API key)
 	translations := api.Group("/translations", AuthMiddleware(apiKey))
 	translations.Post("/", handler.CreateTranslationRequest)
+	translations.Get("/incomplete", handler.GetIncompleteRequests)
 	translations.Get("/:id", handler.GetTranslationRequest)
+	translations.Post("/:id/cancel", handler.CancelTranslationRequest)
 	translations.Delete("/:key", handler.DeleteTranslationKey)
 	translations.Post("/cache", handler.CacheTranslations)
 

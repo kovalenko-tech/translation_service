@@ -83,9 +83,8 @@ func (s *Service) ProcessTranslationRequest(ctx context.Context, requestID uuid.
 		// If value hasn't changed, keep existing translations
 	}
 
-	// Mark as completed
-	request.MarkAsCompleted()
-	return s.repo.UpdateRequestStatus(ctx, requestID, request.Status)
+	// Don't mark as completed here - let the application service do it after translations
+	return nil
 }
 
 // extractTranslationKeys extracts translation keys from ARB data
@@ -247,6 +246,40 @@ func (s *Service) GetTranslatedDataForRequestKeys(ctx context.Context, requestKe
 	}
 
 	return translatedData, nil
+}
+
+// CancelTranslationRequest cancels a translation request
+func (s *Service) CancelTranslationRequest(ctx context.Context, requestID uuid.UUID) error {
+	request, err := s.repo.GetRequestByID(ctx, requestID)
+	if err != nil {
+		return fmt.Errorf("failed to get request: %w", err)
+	}
+
+	// Check if request can be cancelled
+	if request.Status == StatusCompleted || request.Status == StatusFailed || request.Status == StatusCancelled {
+		return fmt.Errorf("request cannot be cancelled in status: %s", request.Status)
+	}
+
+	// Mark as cancelled
+	request.MarkAsCancelled()
+	return s.repo.UpdateRequestStatus(ctx, requestID, request.Status)
+}
+
+// CompleteTranslationRequest marks a translation request as completed
+func (s *Service) CompleteTranslationRequest(ctx context.Context, requestID uuid.UUID) error {
+	request, err := s.repo.GetRequestByID(ctx, requestID)
+	if err != nil {
+		return fmt.Errorf("failed to get request: %w", err)
+	}
+
+	// Mark as completed
+	request.MarkAsCompleted()
+	return s.repo.UpdateRequestStatus(ctx, requestID, request.Status)
+}
+
+// GetIncompleteRequests gets all requests that are not completed, failed, or cancelled
+func (s *Service) GetIncompleteRequests(ctx context.Context) ([]*TranslationRequest, error) {
+	return s.repo.GetIncompleteRequests(ctx)
 }
 
 // DeleteTranslationKey deletes translation key and all its translations

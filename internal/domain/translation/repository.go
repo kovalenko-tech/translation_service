@@ -34,4 +34,7 @@ type Repository interface {
 
 	// Delete translation key and all its translations
 	DeleteTranslationKey(ctx context.Context, key string) error
+
+	// Get all incomplete requests (pending, processing)
+	GetIncompleteRequests(ctx context.Context) ([]*TranslationRequest, error)
 }

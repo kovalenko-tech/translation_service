@@ -24,6 +24,9 @@ The project is built using Domain-Driven Design (DDD) architecture:
 - Translation key management (create, read, delete)
 - **Direct translation caching** - cache translations without running translation process
 - **Smart translation skipping** - skip translation if all required translations already exist
+- **Request cancellation** - cancel translation requests that are still pending or processing
+- **Automatic recovery** - resume incomplete requests after server restart
+- **Request monitoring** - view all incomplete translation requests
 - Interactive API documentation with Swagger
 - Real-time translation status tracking
 - Multi-language translation support
@@ -135,6 +138,45 @@ Caches translations for keys without running translation process. English transl
 - Returns 207 status when some keys are skipped
 - Returns 200 status when all keys are successfully cached
 
+### POST /api/v1/translations/:id/cancel
+Cancels a translation request by ID. Only requests with status `pending` or `processing` can be cancelled.
+
+**Response:**
+```json
+{
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "cancelled",
+  "message": "Translation request cancelled successfully"
+}
+```
+
+**Error Responses:**
+- `409 Conflict` - Request cannot be cancelled (already completed, failed, or cancelled)
+- `404 Not Found` - Request not found
+
+### GET /api/v1/translations/incomplete
+Gets all incomplete translation requests (pending, processing, or cancelled).
+
+**Response:**
+```json
+{
+  "requests": [
+    {
+      "request_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "processing",
+      "source_data": {
+        "hello": "Hello World",
+        "welcome": "Welcome to our app"
+      },
+      "languages": ["es", "fr", "de"],
+      "created_at": "2024-01-01T12:00:00Z",
+      "updated_at": "2024-01-01T12:05:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
 ### DELETE /api/v1/translations/:key
 Deletes a translation key and all its translations.
 
@@ -221,6 +263,18 @@ curl -X POST http://localhost:8080/api/v1/translations/cache \
       }
     }
   }'
+```
+
+**Cancel translation request:**
+```bash
+curl -X POST http://localhost:8080/api/v1/translations/550e8400-e29b-41d4-a716-446655440000/cancel \
+  -H "Authorization: Bearer your_api_key_here"
+```
+
+**Get incomplete requests:**
+```bash
+curl -X GET http://localhost:8080/api/v1/translations/incomplete \
+  -H "Authorization: Bearer your_api_key_here"
 ```
 
 **Important:** Keep the API key in a secure place and do not share it in public repositories.
@@ -351,6 +405,7 @@ The service automatically:
 - `processing` - request is being processed
 - `completed` - request successfully completed
 - `failed` - error occurred during processing
+- `cancelled` - request was cancelled by user
 
 ## Logging
 
@@ -373,6 +428,15 @@ For monitoring queue status, you can use:
 - RabbitMQ Management UI (http://localhost:15672)
 - Redis CLI for viewing cached data
 - Health check endpoint `/api/v1/health`
+- Incomplete requests endpoint `/api/v1/translations/incomplete`
+
+### Request Recovery
+
+The service automatically recovers incomplete translation requests on startup:
+- Requests with status `pending` or `processing` are automatically resumed
+- Only new keys that haven't been translated yet will be processed
+- Cancelled requests are not resumed
+- Detailed recovery logs are provided during startup
 
 ## Translation Caching
 
@@ -389,12 +453,20 @@ The service supports direct translation caching to improve performance and reduc
 2. **External translation sources**: Import translations from other systems
 3. **Manual corrections**: Cache corrected translations without re-translation
 4. **Batch operations**: Cache multiple translations at once
+5. **Request management**: Cancel long-running requests and monitor incomplete ones
+6. **System recovery**: Automatically resume interrupted translations after server restart
 
 ### Caching Rules
 - English translations (`en`) are mandatory for all keys
 - Keys without English translations are skipped
 - Existing translations are updated if provided
 - The service automatically skips translation requests when all required translations exist in cache
+
+### Request Management
+- **Cancellation**: Only requests with status `pending` or `processing` can be cancelled
+- **Recovery**: Incomplete requests are automatically resumed on server restart
+- **Monitoring**: Use `/api/v1/translations/incomplete` to view all incomplete requests
+- **Status tracking**: Real-time status updates during translation processing
 
 ## Production Deployment
 

@@ -32,6 +32,7 @@ const (
 	StatusProcessing RequestStatus = "processing"
 	StatusCompleted  RequestStatus = "completed"
 	StatusFailed     RequestStatus = "failed"
+	StatusCancelled  RequestStatus = "cancelled"
 )
 
 // NewTranslationRequest creates a new translation request
@@ -63,5 +64,11 @@ func (tr *TranslationRequest) MarkAsCompleted() {
 // MarkAsFailed marks request as failed
 func (tr *TranslationRequest) MarkAsFailed() {
 	tr.Status = StatusFailed
+	tr.UpdatedAt = time.Now()
+}
+
+// MarkAsCancelled marks request as cancelled
+func (tr *TranslationRequest) MarkAsCancelled() {
+	tr.Status = StatusCancelled
 	tr.UpdatedAt = time.Now()
 }

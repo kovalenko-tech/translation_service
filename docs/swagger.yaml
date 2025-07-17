@@ -19,6 +19,18 @@ definitions:
         example: Translations cached successfully
         type: string
     type: object
+  dto.CancelTranslationRequestResponse:
+    properties:
+      message:
+        example: Translation request cancelled successfully
+        type: string
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: cancelled
+        type: string
+    type: object
   dto.CreateTranslationRequestRequest:
     properties:
       languages:
@@ -55,6 +67,16 @@ definitions:
       error:
         example: Invalid request body
         type: string
+    type: object
+  dto.GetIncompleteRequestsResponse:
+    properties:
+      count:
+        example: 3
+        type: integer
+      requests:
+        items:
+          $ref: '#/definitions/dto.IncompleteRequestInfo'
+        type: array
     type: object
   dto.GetTranslationRequestResponse:
     properties:
@@ -108,6 +130,33 @@ definitions:
         type: string
       website:
         example: https://kovalenko.tech
+        type: string
+    type: object
+  dto.IncompleteRequestInfo:
+    properties:
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      languages:
+        example:
+        - es
+        - fr
+        - de
+        items:
+          type: string
+        type: array
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      source_data:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        example: processing
+        type: string
+      updated_at:
+        example: "2024-01-01T12:05:00Z"
         type: string
     type: object
 host: localhost:8080
@@ -210,6 +259,50 @@ paths:
       summary: Get translation request
       tags:
       - translations
+  /api/v1/translations/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a translation request by ID if it's still pending or processing
+      parameters:
+      - description: Request ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CancelTranslationRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel translation request
+      tags:
+      - translations
   /api/v1/translations/{key}:
     delete:
       description: Delete translation key and all its translations by key
@@ -273,6 +366,32 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Cache translations
+      tags:
+      - translations
+  /api/v1/translations/incomplete:
+    get:
+      consumes:
+      - application/json
+      description: Get all translation requests that are not completed, failed, or
+        cancelled
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetIncompleteRequestsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get incomplete requests
       tags:
       - translations
 securityDefinitions:

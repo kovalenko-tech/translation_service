@@ -108,6 +108,12 @@ func main() {
 	// Setup routes
 	http.SetupRoutes(app, handler, cfg.Server.APIKey)
 
+	// Recover incomplete requests on startup
+	log.Println("Recovering incomplete translation requests...")
+	if err := appService.RecoverIncompleteRequests(context.Background()); err != nil {
+		log.Printf("Failed to recover incomplete requests: %v", err)
+	}
+
 	// Start consumer in a separate goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

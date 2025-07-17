@@ -57,3 +57,26 @@ type CacheTranslationsErrorResponse struct {
 	SuccessCount int      `json:"success_count" example:"2"`
 	TotalKeys    int      `json:"total_keys" example:"4"`
 }
+
+// CancelTranslationRequestResponse represents response to cancel request
+type CancelTranslationRequestResponse struct {
+	RequestID string `json:"request_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Status    string `json:"status" example:"cancelled"`
+	Message   string `json:"message" example:"Translation request cancelled successfully"`
+}
+
+// GetIncompleteRequestsResponse represents response to get incomplete requests
+type GetIncompleteRequestsResponse struct {
+	Requests []IncompleteRequestInfo `json:"requests"`
+	Count    int                     `json:"count" example:"3"`
+}
+
+// IncompleteRequestInfo represents information about incomplete request
+type IncompleteRequestInfo struct {
+	RequestID  string            `json:"request_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Status     string            `json:"status" example:"processing"`
+	SourceData map[string]string `json:"source_data" example:{"hello":"Hello World"}`
+	Languages  []string          `json:"languages" example:"es,fr,de"`
+	CreatedAt  string            `json:"created_at" example:"2024-01-01T12:00:00Z"`
+	UpdatedAt  string            `json:"updated_at" example:"2024-01-01T12:05:00Z"`
+}

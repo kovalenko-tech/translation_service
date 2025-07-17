@@ -244,3 +244,100 @@ func (h *Handler) CacheTranslations(c *fiber.Ctx) error {
 
 	return c.JSON(response)
 }
+
+// CancelTranslationRequest cancels a translation request by ID
+// @Summary Cancel translation request
+// @Description Cancel a translation request by ID if it's still pending or processing
+// @Tags translations
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Request ID" format(uuid)
+// @Success 200 {object} dto.CancelTranslationRequestResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/translations/{id}/cancel [post]
+func (h *Handler) CancelTranslationRequest(c *fiber.Ctx) error {
+	requestIDStr := c.Params("id")
+
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error: "Invalid request ID format",
+		})
+	}
+
+	err = h.appService.CancelTranslationRequest(c.Context(), requestID)
+	if err != nil {
+		// Check if it's a business logic error (cannot be cancelled)
+		if err.Error() == "request cannot be cancelled in status: completed" ||
+			err.Error() == "request cannot be cancelled in status: failed" ||
+			err.Error() == "request cannot be cancelled in status: cancelled" {
+			return c.Status(http.StatusConflict).JSON(dto.ErrorResponse{
+				Error: err.Error(),
+			})
+		}
+
+		// Check if request not found
+		if err.Error() == "failed to get request: translation request not found" {
+			return c.Status(http.StatusNotFound).JSON(dto.ErrorResponse{
+				Error: "Translation request not found",
+			})
+		}
+
+		return c.Status(http.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error: fmt.Sprintf("Failed to cancel translation request: %v", err),
+		})
+	}
+
+	response := dto.CancelTranslationRequestResponse{
+		RequestID: requestID.String(),
+		Status:    "cancelled",
+		Message:   "Translation request cancelled successfully",
+	}
+
+	return c.JSON(response)
+}
+
+// GetIncompleteRequests gets all incomplete translation requests
+// @Summary Get incomplete requests
+// @Description Get all translation requests that are not completed, failed, or cancelled
+// @Tags translations
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.GetIncompleteRequestsResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/translations/incomplete [get]
+func (h *Handler) GetIncompleteRequests(c *fiber.Ctx) error {
+	requests, err := h.appService.GetIncompleteRequests(c.Context())
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error: fmt.Sprintf("Failed to get incomplete requests: %v", err),
+		})
+	}
+
+	// Convert to DTO format
+	var incompleteRequests []dto.IncompleteRequestInfo
+	for _, request := range requests {
+		incompleteRequests = append(incompleteRequests, dto.IncompleteRequestInfo{
+			RequestID:  request.ID.String(),
+			Status:     string(request.Status),
+			SourceData: request.SourceData,
+			Languages:  request.Languages,
+			CreatedAt:  request.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:  request.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	response := dto.GetIncompleteRequestsResponse{
+		Requests: incompleteRequests,
+		Count:    len(incompleteRequests),
+	}
+
+	return c.JSON(response)
+}

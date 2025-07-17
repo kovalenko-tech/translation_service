@@ -78,7 +78,18 @@ func (s *Service) GetTranslatedDataForRequestKeys(ctx context.Context, requestKe
 func (s *Service) ProcessTranslationTask(ctx context.Context, task *rabbitmq.TranslationTask) error {
 	log.Printf("Starting to process translation task for request ID: %s", task.RequestID)
 
-	// Process request in domain
+	// Check if request was cancelled before starting
+	request, err := s.domainService.GetTranslationRequest(ctx, task.RequestID)
+	if err != nil {
+		return fmt.Errorf("failed to get request: %w", err)
+	}
+
+	if request.Status == translation.StatusCancelled {
+		log.Printf("Request %s was cancelled, skipping processing", task.RequestID)
+		return nil
+	}
+
+	// Process request in domain (this will mark as processing if not already)
 	if err := s.domainService.ProcessTranslationRequest(ctx, task.RequestID); err != nil {
 		return fmt.Errorf("failed to process translation request: %w", err)
 	}
@@ -91,12 +102,36 @@ func (s *Service) ProcessTranslationTask(ctx context.Context, task *rabbitmq.Tra
 
 	if len(pendingKeys) == 0 {
 		log.Printf("No pending translation keys found for request ID: %s - all translations already exist in cache", task.RequestID)
+		// Mark as completed since no translations needed
+		if err := s.CompleteTranslationRequest(ctx, task.RequestID); err != nil {
+			log.Printf("Failed to mark request as completed: %v", err)
+		}
 		return nil
 	}
 
+	log.Printf("Found %d keys that need translation for request ID: %s", len(pendingKeys), task.RequestID)
+
 	// Generate translations for each key
-	for _, key := range pendingKeys {
-		if err := s.translateKey(ctx, key, task.Languages); err != nil {
+	for i, key := range pendingKeys {
+		// Check if request was cancelled before processing each key
+		request, err := s.domainService.GetTranslationRequest(ctx, task.RequestID)
+		if err != nil {
+			log.Printf("Failed to get request status for ID %s: %v", task.RequestID, err)
+			continue
+		}
+
+		if request.Status == translation.StatusCancelled {
+			log.Printf("Request %s was cancelled, stopping translation process", task.RequestID)
+			return nil
+		}
+
+		log.Printf("Translating key %d/%d: %s for request ID: %s", i+1, len(pendingKeys), key.Key, task.RequestID)
+
+		if err := s.translateKey(ctx, key, task.Languages, task.RequestID); err != nil {
+			if err.Error() == "request was cancelled" {
+				log.Printf("Translation cancelled for request %s", task.RequestID)
+				return nil
+			}
 			log.Printf("Failed to translate key %s: %v", key.Key, err)
 			continue
 		}
@@ -107,16 +142,33 @@ func (s *Service) ProcessTranslationTask(ctx context.Context, task *rabbitmq.Tra
 		}
 	}
 
+	// Mark as completed after all translations are done
+	if err := s.CompleteTranslationRequest(ctx, task.RequestID); err != nil {
+		log.Printf("Failed to mark request as completed: %v", err)
+	}
+
 	log.Printf("Successfully processed translation task for request ID: %s", task.RequestID)
 	return nil
 }
 
 // translateKey translates one key to all specified languages
-func (s *Service) translateKey(ctx context.Context, key *translation.TranslationKey, languages []string) error {
+func (s *Service) translateKey(ctx context.Context, key *translation.TranslationKey, languages []string, requestID uuid.UUID) error {
 	// Assume source language is English (can be made configurable)
 	sourceLanguage := "en"
 
 	for _, targetLang := range languages {
+		// Check if request was cancelled before each translation
+		request, err := s.domainService.GetTranslationRequest(ctx, requestID)
+		if err != nil {
+			log.Printf("Failed to get request status for ID %s: %v", requestID, err)
+			continue
+		}
+
+		if request.Status == translation.StatusCancelled {
+			log.Printf("Request %s was cancelled, stopping translation of key %s", requestID, key.Key)
+			return fmt.Errorf("request was cancelled")
+		}
+
 		// Skip if translation already exists
 		if _, exists := key.Translations[targetLang]; exists {
 			log.Printf("Translation for key %s to %s already exists, skipping", key.Key, targetLang)
@@ -165,4 +217,61 @@ func (s *Service) DeleteTranslationKey(ctx context.Context, key string) error {
 // CacheTranslations caches translations for keys without running translation process
 func (s *Service) CacheTranslations(ctx context.Context, translations map[string]map[string]string) (*translation.CacheTranslationsResult, error) {
 	return s.domainService.CacheTranslations(ctx, translations)
+}
+
+// CancelTranslationRequest cancels a translation request
+func (s *Service) CancelTranslationRequest(ctx context.Context, requestID uuid.UUID) error {
+	return s.domainService.CancelTranslationRequest(ctx, requestID)
+}
+
+// CompleteTranslationRequest marks a translation request as completed
+func (s *Service) CompleteTranslationRequest(ctx context.Context, requestID uuid.UUID) error {
+	return s.domainService.CompleteTranslationRequest(ctx, requestID)
+}
+
+// GetIncompleteRequests gets all requests that are not completed, failed, or cancelled
+func (s *Service) GetIncompleteRequests(ctx context.Context) ([]*translation.TranslationRequest, error) {
+	return s.domainService.GetIncompleteRequests(ctx)
+}
+
+// RecoverIncompleteRequests recovers and processes incomplete requests on server startup
+func (s *Service) RecoverIncompleteRequests(ctx context.Context) error {
+	log.Printf("Starting recovery of incomplete translation requests...")
+
+	incompleteRequests, err := s.GetIncompleteRequests(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get incomplete requests: %w", err)
+	}
+
+	if len(incompleteRequests) == 0 {
+		log.Printf("No incomplete requests found")
+		return nil
+	}
+
+	log.Printf("Found %d incomplete requests to recover", len(incompleteRequests))
+
+	for _, request := range incompleteRequests {
+		log.Printf("Recovering request ID: %s (status: %s)", request.ID, request.Status)
+
+		// Create task for RabbitMQ
+		task := &rabbitmq.TranslationTask{
+			RequestID:  request.ID,
+			SourceData: request.SourceData,
+			Languages:  request.Languages,
+		}
+
+		// Send task to queue
+		if err := s.rabbitService.PublishTask(ctx, task); err != nil {
+			log.Printf("Failed to publish recovery task for request ID %s: %v", request.ID, err)
+			// Mark as failed if we can't queue it
+			request.MarkAsFailed()
+			s.domainService.GetRepository().UpdateRequestStatus(ctx, request.ID, request.Status)
+			continue
+		}
+
+		log.Printf("Successfully queued recovery task for request ID: %s", request.ID)
+	}
+
+	log.Printf("Recovery of incomplete requests completed")
+	return nil
 }
