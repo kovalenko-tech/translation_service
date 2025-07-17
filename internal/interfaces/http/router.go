@@ -17,6 +17,7 @@ func SetupRoutes(app *fiber.App, handler *Handler, apiKey string) {
 	translations.Post("/", handler.CreateTranslationRequest)
 	translations.Get("/:id", handler.GetTranslationRequest)
 	translations.Delete("/:key", handler.DeleteTranslationKey)
+	translations.Post("/cache", handler.CacheTranslations)
 
 	// Swagger documentation with security support
 	app.Get("/swagger/*", SwaggerHandler())

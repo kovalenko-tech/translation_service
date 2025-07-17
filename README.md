@@ -22,6 +22,8 @@ The project is built using Domain-Driven Design (DDD) architecture:
 - Translation generation via OpenAI API
 - REST API for creating requests and getting status
 - Translation key management (create, read, delete)
+- **Direct translation caching** - cache translations without running translation process
+- **Smart translation skipping** - skip translation if all required translations already exist
 - Interactive API documentation with Swagger
 - Real-time translation status tracking
 - Multi-language translation support
@@ -86,6 +88,53 @@ Gets the status and results of a translation request.
 
 **Note:** The `translated_data` field is only included when the request status is `completed`.
 
+### POST /api/v1/translations/cache
+Caches translations for keys without running translation process. English translations are required for all keys.
+
+**Request Body:**
+```json
+{
+  "translations": {
+    "en": {
+      "hello": "Hello World",
+      "welcome": "Welcome to our app"
+    },
+    "es": {
+      "hello": "Hola Mundo",
+      "welcome": "Bienvenido a nuestra aplicación"
+    },
+    "fr": {
+      "hello": "Bonjour le monde",
+      "welcome": "Bienvenue dans notre application"
+    }
+  }
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "message": "Translations cached successfully",
+  "count": 2
+}
+```
+
+**Partial Success Response (207 Multi-Status):**
+```json
+{
+  "error": "Some translations could not be cached - English translations are required for all keys",
+  "skipped_keys": ["missingKey"],
+  "success_count": 1,
+  "total_keys": 2
+}
+```
+
+**Note:** 
+- English translations (`en`) are mandatory for all keys
+- Keys without English translations will be skipped
+- Returns 207 status when some keys are skipped
+- Returns 200 status when all keys are successfully cached
+
 ### DELETE /api/v1/translations/:key
 Deletes a translation key and all its translations.
 
@@ -149,6 +198,29 @@ curl -X GET http://localhost:8080/api/v1/translations/550e8400-e29b-41d4-a716-44
 ```bash
 curl -X DELETE http://localhost:8080/api/v1/translations/hello \
   -H "Authorization: Bearer your_api_key_here"
+```
+
+**Cache translations:**
+```bash
+curl -X POST http://localhost:8080/api/v1/translations/cache \
+  -H "Authorization: Bearer your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "translations": {
+      "en": {
+        "hello": "Hello World",
+        "welcome": "Welcome to our app"
+      },
+      "es": {
+        "hello": "Hola Mundo",
+        "welcome": "Bienvenido a nuestra aplicación"
+      },
+      "fr": {
+        "hello": "Bonjour le monde",
+        "welcome": "Bienvenue dans notre application"
+      }
+    }
+  }'
 ```
 
 **Important:** Keep the API key in a secure place and do not share it in public repositories.
@@ -301,6 +373,28 @@ For monitoring queue status, you can use:
 - RabbitMQ Management UI (http://localhost:15672)
 - Redis CLI for viewing cached data
 - Health check endpoint `/api/v1/health`
+
+## Translation Caching
+
+The service supports direct translation caching to improve performance and reduce API costs:
+
+### Benefits
+- **Performance**: Instant access to cached translations
+- **Cost reduction**: Avoid unnecessary OpenAI API calls
+- **Flexibility**: Cache translations from external sources
+- **Smart processing**: Skip translation if all required translations exist
+
+### Usage Scenarios
+1. **Pre-loading translations**: Cache existing translations before processing new requests
+2. **External translation sources**: Import translations from other systems
+3. **Manual corrections**: Cache corrected translations without re-translation
+4. **Batch operations**: Cache multiple translations at once
+
+### Caching Rules
+- English translations (`en`) are mandatory for all keys
+- Keys without English translations are skipped
+- Existing translations are updated if provided
+- The service automatically skips translation requests when all required translations exist in cache
 
 ## Production Deployment
 

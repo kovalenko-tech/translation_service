@@ -1,4 +1,24 @@
 definitions:
+  dto.CacheTranslationsRequest:
+    properties:
+      translations:
+        additionalProperties:
+          additionalProperties:
+            type: string
+          type: object
+        type: object
+    required:
+    - translations
+    type: object
+  dto.CacheTranslationsResponse:
+    properties:
+      count:
+        example: 4
+        type: integer
+      message:
+        example: Translations cached successfully
+        type: string
+    type: object
   dto.CreateTranslationRequestRequest:
     properties:
       languages:
@@ -74,11 +94,20 @@ definitions:
     type: object
   dto.HealthResponse:
     properties:
+      author:
+        example: Kyrylo Kovalenko
+        type: string
+      contact:
+        example: git@kovalenko.tech
+        type: string
       message:
         example: Translation service is running
         type: string
       status:
         example: ok
+        type: string
+      website:
+        example: https://kovalenko.tech
         type: string
     type: object
 host: localhost:8080
@@ -208,6 +237,42 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Delete translation key
+      tags:
+      - translations
+  /api/v1/translations/cache:
+    post:
+      consumes:
+      - application/json
+      description: Cache translations for keys without running translation process
+      parameters:
+      - description: Translations to cache
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CacheTranslationsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CacheTranslationsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cache translations
       tags:
       - translations
 securityDefinitions:

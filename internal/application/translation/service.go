@@ -90,7 +90,7 @@ func (s *Service) ProcessTranslationTask(ctx context.Context, task *rabbitmq.Tra
 	}
 
 	if len(pendingKeys) == 0 {
-		log.Printf("No pending translation keys found for request ID: %s", task.RequestID)
+		log.Printf("No pending translation keys found for request ID: %s - all translations already exist in cache", task.RequestID)
 		return nil
 	}
 
@@ -160,4 +160,9 @@ func (s *Service) StartConsumer(ctx context.Context) error {
 // DeleteTranslationKey deletes translation key and all its translations
 func (s *Service) DeleteTranslationKey(ctx context.Context, key string) error {
 	return s.domainService.DeleteTranslationKey(ctx, key)
+}
+
+// CacheTranslations caches translations for keys without running translation process
+func (s *Service) CacheTranslations(ctx context.Context, translations map[string]map[string]string) (*translation.CacheTranslationsResult, error) {
+	return s.domainService.CacheTranslations(ctx, translations)
 }

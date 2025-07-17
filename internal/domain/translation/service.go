@@ -159,15 +159,6 @@ func (s *Service) GetPendingTranslationKeysForRequest(ctx context.Context, sourc
 			continue
 		}
 
-		// Check if value has changed
-		if existingKey.Value != keyValue {
-			// Value has changed, clear existing translations and add to pending
-			existingKey.Value = keyValue
-			existingKey.Translations = make(map[string]string)
-			pendingKeys = append(pendingKeys, existingKey)
-			continue
-		}
-
 		// Check if this key needs translation for any of the requested languages
 		needsTranslation := false
 		for _, lang := range languages {
@@ -177,8 +168,23 @@ func (s *Service) GetPendingTranslationKeysForRequest(ctx context.Context, sourc
 			}
 		}
 
+		// Only add to pending if translations are missing
 		if needsTranslation {
+			// Update the value if it's different (but don't clear existing translations)
+			if existingKey.Value != keyValue {
+				existingKey.Value = keyValue
+			}
 			pendingKeys = append(pendingKeys, existingKey)
+		} else {
+			// All translations exist, just update the value if needed
+			if existingKey.Value != keyValue {
+				existingKey.Value = keyValue
+				// Save the updated value without triggering translation
+				if err := s.repo.SaveTranslationKey(ctx, existingKey); err != nil {
+					fmt.Printf("Failed to update value for key %s: %v\n", keyName, err)
+				}
+			}
+			fmt.Printf("Key %s already has all required translations, skipping translation process\n", keyName)
 		}
 	}
 
@@ -261,4 +267,82 @@ func (s *Service) DeleteTranslationKey(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// CacheTranslationsResult represents the result of caching translations
+type CacheTranslationsResult struct {
+	SuccessCount int
+	SkippedKeys  []string
+	TotalKeys    int
+}
+
+// CacheTranslations caches translations for keys without running translation process
+func (s *Service) CacheTranslations(ctx context.Context, translations map[string]map[string]string) (*CacheTranslationsResult, error) {
+	result := &CacheTranslationsResult{
+		SkippedKeys: []string{},
+	}
+
+	// First, collect all keys and their translations
+	keyTranslations := make(map[string]map[string]string)
+
+	// Process each language
+	for lang, langTranslations := range translations {
+		for keyName, translationValue := range langTranslations {
+			if keyTranslations[keyName] == nil {
+				keyTranslations[keyName] = make(map[string]string)
+			}
+			keyTranslations[keyName][lang] = translationValue
+		}
+	}
+
+	result.TotalKeys = len(keyTranslations)
+
+	// Now process each key
+	for keyName, langTranslations := range keyTranslations {
+		// Check if we have English translation (source language)
+		englishValue, hasEnglish := langTranslations["en"]
+		if !hasEnglish {
+			// Skip keys without English translation
+			fmt.Printf("Skipping key %s - no English translation provided\n", keyName)
+			result.SkippedKeys = append(result.SkippedKeys, keyName)
+			continue
+		}
+
+		// Get existing key or create new one
+		existingKey, err := s.repo.GetTranslationKey(ctx, keyName)
+		if err != nil {
+			// Key doesn't exist, create new one with English value
+			newKey := &TranslationKey{
+				Key:          keyName,
+				Value:        englishValue, // Use English translation as source value
+				Translations: make(map[string]string),
+			}
+
+			// Add all translations
+			for lang, translationValue := range langTranslations {
+				newKey.Translations[lang] = translationValue
+			}
+
+			if err := s.repo.SaveTranslationKey(ctx, newKey); err != nil {
+				return result, fmt.Errorf("failed to save new translation key %s: %w", keyName, err)
+			}
+			result.SuccessCount++
+		} else {
+			// Key exists, update translations and value
+			// Update the value to English translation
+			existingKey.Value = englishValue
+
+			// Add or update all translations
+			for lang, translationValue := range langTranslations {
+				existingKey.Translations[lang] = translationValue
+			}
+
+			if err := s.repo.SaveTranslationKey(ctx, existingKey); err != nil {
+				return result, fmt.Errorf("failed to update translation key %s: %w", keyName, err)
+			}
+			result.SuccessCount++
+		}
+	}
+
+	return result, nil
 }

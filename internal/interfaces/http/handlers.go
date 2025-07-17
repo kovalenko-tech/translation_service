@@ -184,3 +184,63 @@ func (h *Handler) DeleteTranslationKey(c *fiber.Ctx) error {
 
 	return c.SendStatus(http.StatusNoContent)
 }
+
+// CacheTranslations caches translations for keys without running translation process
+// @Summary Cache translations
+// @Description Cache translations for keys without running translation process
+// @Tags translations
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.CacheTranslationsRequest true "Translations to cache"
+// @Success 200 {object} dto.CacheTranslationsResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/translations/cache [post]
+func (h *Handler) CacheTranslations(c *fiber.Ctx) error {
+	var req dto.CacheTranslationsRequest
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error: "Invalid request body",
+		})
+	}
+
+	// Validate input data
+	if len(req.Translations) == 0 {
+		return c.Status(http.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error: "Translations data is required",
+		})
+	}
+
+	// Cache translations
+	result, err := h.appService.CacheTranslations(c.Context(), req.Translations)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error: fmt.Sprintf("Failed to cache translations: %v", err),
+		})
+	}
+
+	// Check if there were any skipped keys
+	if len(result.SkippedKeys) > 0 {
+		// Some keys were skipped due to missing English translations
+		errorResponse := dto.CacheTranslationsErrorResponse{
+			Error:        "Some translations could not be cached - English translations are required for all keys",
+			SkippedKeys:  result.SkippedKeys,
+			SuccessCount: result.SuccessCount,
+			TotalKeys:    result.TotalKeys,
+		}
+
+		// Return 207 Multi-Status to indicate partial success
+		return c.Status(http.StatusMultiStatus).JSON(errorResponse)
+	}
+
+	// All translations were cached successfully
+	response := dto.CacheTranslationsResponse{
+		Message: "Translations cached successfully",
+		Count:   result.SuccessCount,
+	}
+
+	return c.JSON(response)
+}

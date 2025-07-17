@@ -38,3 +38,22 @@ type HealthResponse struct {
 	Contact string `json:"contact" example:"git@kovalenko.tech"`
 	Website string `json:"website" example:"https://kovalenko.tech"`
 }
+
+// CacheTranslationsRequest represents request to cache translations
+type CacheTranslationsRequest struct {
+	Translations map[string]map[string]string `json:"translations" validate:"required" example:{"en":{"hello":"Hello World","welcome":"Welcome"},"es":{"hello":"Hola Mundo","welcome":"Bienvenido"}}`
+}
+
+// CacheTranslationsResponse represents response to cache translations request
+type CacheTranslationsResponse struct {
+	Message string `json:"message" example:"Translations cached successfully"`
+	Count   int    `json:"count" example:"4"`
+}
+
+// CacheTranslationsErrorResponse represents error response for cache translations
+type CacheTranslationsErrorResponse struct {
+	Error        string   `json:"error" example:"Some translations could not be cached"`
+	SkippedKeys  []string `json:"skipped_keys" example:"key1,key2"`
+	SuccessCount int      `json:"success_count" example:"2"`
+	TotalKeys    int      `json:"total_keys" example:"4"`
+}

@@ -101,6 +101,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/translations/cache": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cache translations for keys without running translation process",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "translations"
+                ],
+                "summary": "Cache translations",
+                "parameters": [
+                    {
+                        "description": "Translations to cache",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CacheTranslationsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CacheTranslationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/translations/{id}": {
             "get": {
                 "security": [
@@ -205,6 +262,36 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.CacheTranslationsRequest": {
+            "type": "object",
+            "required": [
+                "translations"
+            ],
+            "properties": {
+                "translations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "dto.CacheTranslationsResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Translations cached successfully"
+                }
+            }
+        },
         "dto.CreateTranslationRequestRequest": {
             "type": "object",
             "required": [
@@ -312,6 +399,14 @@ const docTemplate = `{
         "dto.HealthResponse": {
             "type": "object",
             "properties": {
+                "author": {
+                    "type": "string",
+                    "example": "Kyrylo Kovalenko"
+                },
+                "contact": {
+                    "type": "string",
+                    "example": "git@kovalenko.tech"
+                },
                 "message": {
                     "type": "string",
                     "example": "Translation service is running"
@@ -319,6 +414,10 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "ok"
+                },
+                "website": {
+                    "type": "string",
+                    "example": "https://kovalenko.tech"
                 }
             }
         }
